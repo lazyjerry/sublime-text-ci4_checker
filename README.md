@@ -9,14 +9,13 @@ CodeIgniter 4 PHP File Checker 是一款 Sublime Text 插件，用於檢查 Code
 - **檔案命名檢查**: 檢查 PHP 檔案是否符合 PascalCase 命名規範。
 - **use 語句檢查**: 檢查程式碼中使用到的類別是否正確通過 `use` 語句引入。
 - **移除註解與字串干擾**: 自動忽略 PHP 註解和引號內的內容，避免誤判。
-- **內建類別過濾**: 自動過濾 PHP 內建類別（如 `Exception`、`DateTime` 等），避免誤報。
 
 ## 安裝
 
 1. **下載插件**：
    - 將此專案克隆或下載到 Sublime Text 的插件目錄：
      ```
-     git clone https://github.com/你的用戶名/ci4-php-file-checker.git
+     git clone https://github.com/lazyjerry/sublime-text-ci4_checker.git
      ```
 
 2. **重啟 Sublime Text**：
