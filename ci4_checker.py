@@ -22,6 +22,12 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
             self.show_success_message(view, "檢查完成，無法找到 `.env` 文件，此專案可能不是 CodeIgniter 4 專案")
             return
 
+        # 檢查是否符合 CodeIgniter 4 資料夾結構
+        is_ci4 = self.is_codeigniter4_project(project_root)
+        if not is_ci4:
+            self.show_success_message(view, "檢查完成，此專案不是 CodeIgniter 4 專案")
+            return
+
         # 執行檢查邏輯
         self.show_success_message(view, "檢測到 CodeIgniter 4 PHP 檔案，開始執行檢查")
         view.erase_status("ci4_check")
@@ -117,14 +123,38 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
         獲取專案根目錄，通過檢測是否存在 `.env` 文件確定。
         """
         current_dir = os.path.dirname(file_path)
+    
         while current_dir:
-            if os.path.exists(os.path.join(current_dir, ".env")):
-                return current_dir
+            env_path = os.path.join(current_dir, ".env")
+            if os.path.exists(env_path):
+                 return current_dir
             parent_dir = os.path.dirname(current_dir)
             if parent_dir == current_dir:
-                break
+                break  # 已達根目錄
             current_dir = parent_dir
+
         return None
+
+    def is_codeigniter4_project(self, directory):
+        """
+        檢查目錄是否符合 CodeIgniter 4 專案的基本結構。
+        必須包含以下目錄和檔案：
+        - `app/`
+        - `system/`
+        - `public/` 或 `writable/`
+        """
+        required_paths = ["app","writable"]
+        optional_paths = ["public","vendor"]
+
+        for path in required_paths:
+            if not os.path.isdir(os.path.join(directory, path)):
+                return False
+
+        for path in optional_paths:
+            if os.path.isdir(os.path.join(directory, path)):
+                return True  # 找到至少一個可選目錄即確認為 CI4 專案
+
+        return False
 
     def show_error_message(self, message):
         """
@@ -138,3 +168,4 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
         """
         view.set_status("ci4_check", f"------ CodeIgniter 4 Checker ------ {message}------\n")
         sublime.set_timeout(lambda: view.erase_status("ci4_check"), 5000)
+        # sublime.message_dialog(f"------ CodeIgniter 4 Checker ------\n\n{message}\n")
