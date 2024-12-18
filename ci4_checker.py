@@ -89,6 +89,7 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
         """
         # 使用正則表達式匹配類別使用場景
         pattern = r"""
+            (\\?[A-Z][a-zA-Z0-9_\\]+)::|           # 靜態方法調用，支持完整命名空間
             ([A-Z][a-zA-Z0-9_]+)::|               # 靜態方法調用
             new\s+([A-Z][a-zA-Z0-9_]+)|           # 物件使用 new 方法創建
             @(?:var|param|return)\s+([A-Z][a-zA-Z0-9_]*)|  # PHPDoc 註解
