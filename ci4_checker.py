@@ -40,7 +40,7 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
         if not errors:
             self.show_success_message(view, "CodeIgniter 4 PHP 檔案檢查完成，未發現任何問題！")
         else:
-            self.show_error_message(errors)
+            self.show_error_message(view, errors)
 
     def check_variable_naming(self, view):
         """
@@ -180,14 +180,14 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
 
         return False
 
-    def show_error_message(self, errors):
+    def show_error_message(self, view, errors):
         """
-        顯示錯誤訊息對話框，提醒使用者檢查問題。
+        顯示錯誤訊息於彈出視窗，提醒使用者檢查問題。
         """
         grouped_errors = {}
 
         for line_num, message in errors:
-            category = message.split(":")[0]
+            category = message.split("：")[0]
             if category not in grouped_errors:
                 grouped_errors[category] = []
             grouped_errors[category].append(f"第 {line_num} 行：{message}")
@@ -196,20 +196,41 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
         for category, details in grouped_errors.items():
             # 添加統一描述
             description = self.get_description_for_category(category)
+            # 切換 HTML 格式
+            # full_message += f"<b>{category}</b><br>{description}<br>" + "<br>".join(details) + "<br><br>"
             full_message += f"{category}\n{description}\n" + "\n".join(details) + "\n\n"
 
-        sublime.message_dialog(f"-- CodeIgniter 4 Checker --\n\n{full_message}")
+
+        # 使用 HTML 格式顯示訊息
+        # view.show_popup(full_message, max_width=800)
+        # 改為在面板上顯示錯誤
+        self.show_errors_in_panel(view, full_message)
 
     def get_description_for_category(self, category):
         """
         根據錯誤類型返回統一描述。
         """
         descriptions = {
-            "變數命名錯誤": "請使用 CamelCase 命名規則，並以小寫字母開頭，或使用全大寫格式作為常量名稱，或遵循環境變數命名規則（如 $_ENV）。",
-            "檔案命名錯誤": "請使用 PascalCase 或允許的命名規則（英數大小寫 + dash 或 underline），並以 .php 結尾。",
+            "變數": "請使用 CamelCase 命名規則，並以小寫字母開頭，或使用全大寫格式作為常量名稱，或遵循環境變數命名規則（如 $_ENV）。",
+            "檔名": "請使用 PascalCase 或允許的命名規則（英數大小寫 + dash 或 underline），並以 .php 結尾。",
             "類別未通過 `use` 引入": "請檢查檔案內容，並確保使用到的類別已正確引入。",
         }
         return descriptions.get(category, "")
+
+    def show_errors_in_panel(self, view, full_message):
+        """
+        在輸出面板中顯示錯誤訊息。
+        """
+        window = view.window()
+        if not window:
+            return
+
+        panel = window.create_output_panel("ci4_checker")
+        panel.set_read_only(False)
+        panel.run_command("append", {"characters": full_message})
+        panel.set_read_only(True)
+        window.run_command("show_panel", {"panel": "output.ci4_checker"})
+
 
     def show_success_message(self, view, message):
         """
