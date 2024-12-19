@@ -33,27 +33,50 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
         view.erase_status("ci4_check")
         errors = []
         errors.extend(self.check_file_naming(view))
+        errors.extend(self.check_variable_naming(view))  # 變數命名檢查
         errors.extend(self.check_use_statements(view))
 
         # 根據檢查結果顯示提示
         if not errors:
             self.show_success_message(view, "CodeIgniter 4 PHP 檔案檢查完成，未發現任何問題！")
         else:
-            self.show_error_message("\n\n".join(errors))
+            self.show_error_message(errors)
+
+    def check_variable_naming(self, view):
+        """
+        檢查變數名稱是否符合 CamelCase 命名規則（字首小寫，或下劃線開頭，或全大寫）。
+        """
+        errors = []
+        content = view.substr(sublime.Region(0, view.size()))
+
+        # 匹配變數名稱
+        variable_pattern = r"\$(\w+)"  # 提取所有變數名稱
+        camel_case_pattern = r"^[a-z_][a-zA-Z0-9_]*$"  # CamelCase 或下劃線開頭
+        all_caps_pattern = r"^[A-Z_]+$"  # 全大寫命名規則
+
+        # 搜尋變數名稱
+        for line_num, line in enumerate(content.splitlines(), start=1):
+            variables = re.findall(variable_pattern, line)
+            for var in variables:
+                if not (re.match(camel_case_pattern, var) or re.match(all_caps_pattern, var)):
+                    errors.append((line_num, f"變數：${var}"))
+        return errors
 
     def check_file_naming(self, view):
         """
-        檢查檔案名稱是否符合 CodeIgniter 4 命名規則（PascalCase）。
+        檢查檔案名稱是否符合 CodeIgniter 4 命名規則（PascalCase 或白名單規則）。
         """
         errors = []
         file_name = view.file_name()
         base_name = os.path.basename(file_name)
 
-        # 匹配 PascalCase 命名規則
-        if not re.match(r"^[A-Z][a-zA-Z0-9]*\.php$", base_name):
-            errors.append(
-                f"檔案命名錯誤: {base_name}\n\n請使用 PascalCase 並以 .php 結尾。\n\n例如：MyClass.php"
-            )
+        # 定義允許的命名規則
+        pascal_case_pattern = r"^[A-Z][a-zA-Z0-9]*\.php$"  # PascalCase 命名規則
+        whitelist_pattern = r"^[a-zA-Z0-9_-]+\.php$"  # 英數大小寫 + dash 或 underline
+
+        # 檢查是否符合任一規則
+        if not (re.match(pascal_case_pattern, base_name) or re.match(whitelist_pattern, base_name)):
+            errors.append((0, f"檔名：{base_name}"))
         return errors
 
     def check_use_statements(self, view):
@@ -77,10 +100,10 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
         used_classes = self.extract_used_classes(content)
 
         # 找出使用到但未通過 use 引入的類別
-        missing_classes = used_classes - set(use_map.keys())
-        for cls in missing_classes:
-            errors.append(f"`{cls}` 類別未通過 `use` 引入，請檢查檔案內容。")
-
+        for line_num, line in enumerate(content.splitlines(), start=1):
+            for cls in used_classes:
+                if cls in line and cls not in use_map.keys():
+                    errors.append((line_num, f"`{cls}` 類別未通過 `use` 引入"))
         return errors
 
     def extract_used_classes(self, content):
@@ -114,8 +137,8 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
             /\*[\s\S]*?\*/ |           # 多行註解
             //.*?$ |                   # 單行註解
             #.*?$ |                    # 另一種單行註解
-            "(?:\\.|[^"\\])*" |        # 雙引號中的內容
-            '(?:\\.|[^'\\])*'          # 單引號中的內容
+            \"(?:\\.|[^\\\"])*\" |        # 雙引號中的內容
+            '(?:\\.|[^\\'])*'          # 單引號中的內容
         """
         return re.sub(pattern, "", content, flags=re.MULTILINE | re.VERBOSE)
 
@@ -128,7 +151,7 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
         while current_dir:
             env_path = os.path.join(current_dir, ".env")
             if os.path.exists(env_path):
-                 return current_dir
+                return current_dir
             parent_dir = os.path.dirname(current_dir)
             if parent_dir == current_dir:
                 break  # 已達根目錄
@@ -157,11 +180,36 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
 
         return False
 
-    def show_error_message(self, message):
+    def show_error_message(self, errors):
         """
         顯示錯誤訊息對話框，提醒使用者檢查問題。
         """
-        sublime.message_dialog(f"------ CodeIgniter 4 Checker ------\n\n{message}\n")
+        grouped_errors = {}
+
+        for line_num, message in errors:
+            category = message.split(":")[0]
+            if category not in grouped_errors:
+                grouped_errors[category] = []
+            grouped_errors[category].append(f"第 {line_num} 行：{message}")
+
+        full_message = ""
+        for category, details in grouped_errors.items():
+            # 添加統一描述
+            description = self.get_description_for_category(category)
+            full_message += f"{category}\n{description}\n" + "\n".join(details) + "\n\n"
+
+        sublime.message_dialog(f"-- CodeIgniter 4 Checker --\n\n{full_message}")
+
+    def get_description_for_category(self, category):
+        """
+        根據錯誤類型返回統一描述。
+        """
+        descriptions = {
+            "變數命名錯誤": "請使用 CamelCase 命名規則，並以小寫字母開頭，或使用全大寫格式作為常量名稱，或遵循環境變數命名規則（如 $_ENV）。",
+            "檔案命名錯誤": "請使用 PascalCase 或允許的命名規則（英數大小寫 + dash 或 underline），並以 .php 結尾。",
+            "類別未通過 `use` 引入": "請檢查檔案內容，並確保使用到的類別已正確引入。",
+        }
+        return descriptions.get(category, "")
 
     def show_success_message(self, view, message):
         """
@@ -169,4 +217,3 @@ class Ci4FileCheckerCommand(sublime_plugin.EventListener):
         """
         view.set_status("ci4_check", f"------ CodeIgniter 4 Checker ------ {message}------\n")
         sublime.set_timeout(lambda: view.erase_status("ci4_check"), 5000)
-        # sublime.message_dialog(f"------ CodeIgniter 4 Checker ------\n\n{message}\n")
